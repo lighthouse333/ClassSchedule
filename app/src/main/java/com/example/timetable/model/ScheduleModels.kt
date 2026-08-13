@@ -141,6 +141,23 @@ data class ScheduleSettings(
     val classPeriods: List<ClassPeriod>
 )
 
+fun findWeekContainingDate(
+    date: LocalDate,
+    semesterStart: LocalDate,
+    totalWeeks: Int
+): Int {
+    require(totalWeeks > 0) { "totalWeeks must be positive" }
+
+    if (date.isBefore(semesterStart)) return 1
+
+    for (week in 1..totalWeeks) {
+        val weekStart = semesterStart.plusWeeks((week - 1).toLong())
+        if (date.isBefore(weekStart.plusWeeks(1))) return week
+    }
+
+    return totalWeeks
+}
+
 fun createDefaultScheduleSettings(): ScheduleSettings {
     val sectionCount = 6
     return ScheduleSettings(

@@ -54,13 +54,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.timetable.model.Course
 import com.example.timetable.importer.TimetableImportSchool
+import com.example.timetable.model.findWeekContainingDate
 import com.example.timetable.model.formatActiveWeeks
 import com.example.timetable.model.isActiveInWeek
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 
 @Composable
 fun TimetableScreen(
     viewModel: TimetableViewModel,
+    foregroundEntry: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val weekDays = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
@@ -100,15 +104,15 @@ fun TimetableScreen(
     val classPeriods = settings.classPeriods
     val pagerState = rememberPagerState(initialPage = 0) { totalWeeks }
     val coroutineScope = rememberCoroutineScope()
-    LaunchedEffect(totalWeeks) {
-        val page = pagerState.currentPage.coerceIn(0, totalWeeks - 1)
-        if (page != pagerState.currentPage) pagerState.scrollToPage(page)
-        currentWeek = page + 1
-    }
+    val localDate = LocalDate.now(ZoneId.systemDefault())
+    val semesterEndExclusive = semesterStart.plusWeeks(totalWeeks.toLong())
+    val isLocalDateInSemester =
+        !localDate.isBefore(semesterStart) && localDate.isBefore(semesterEndExclusive)
 
-    LaunchedEffect(selectedTimetableId) {
-        pagerState.scrollToPage(0)
-        currentWeek = 1
+    LaunchedEffect(selectedTimetableId, semesterStart, totalWeeks, foregroundEntry) {
+        val targetWeek = findWeekContainingDate(localDate, semesterStart, totalWeeks)
+        pagerState.scrollToPage(targetWeek - 1)
+        currentWeek = targetWeek
         selectedCourse = null
     }
 
@@ -483,6 +487,7 @@ fun TimetableScreen(
                     val date = displayedWeekStart.plusDays(dayIndex.toLong())
                     TimetableHeaderCell(
                         text = "$day\n${formatMonthDay(date)}",
+                        isHighlighted = isLocalDateInSemester && date == localDate,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -862,12 +867,18 @@ private fun coursesConflict(first: Course, second: Course): Boolean =
         !coursesAreDuplicates(first, second)
 
 @Composable
-private fun TimetableHeaderCell(text: String, modifier: Modifier = Modifier) {
+private fun TimetableHeaderCell(
+    text: String,
+    modifier: Modifier = Modifier,
+    isHighlighted: Boolean = false
+) {
+    val backgroundColor = if (isHighlighted) Color(0xFFFFE0B2) else Color(0xFFE8EAF6)
+    val contentColor = if (isHighlighted) Color(0xFFE65100) else Color.Black
     Box(
         modifier = modifier
             .fillMaxSize()
             .padding(2.dp)
-            .background(Color(0xFFE8EAF6), RoundedCornerShape(6.dp)),
+            .background(backgroundColor, RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
         val lines = text.split('\n', limit = 2)
@@ -876,14 +887,15 @@ private fun TimetableHeaderCell(text: String, modifier: Modifier = Modifier) {
                 text = lines.first(),
                 fontSize = 11.sp,
                 lineHeight = 12.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = contentColor
             )
             lines.getOrNull(1)?.let { date ->
                 Text(
                     text = date,
                     fontSize = 9.sp,
                     lineHeight = 10.sp,
-                    color = Color.Gray
+                    color = if (isHighlighted) contentColor else Color.Gray
                 )
             }
         }
