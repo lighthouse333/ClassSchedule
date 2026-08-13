@@ -8,12 +8,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [CourseEntity::class],
-    version = 2,
+    entities = [CourseEntity::class, TimetableEntity::class],
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
+    abstract fun timetableDao(): TimetableDao
 
     companion object {
         @Volatile
@@ -25,7 +26,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "class_schedule.db"
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }
@@ -35,6 +36,27 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE courses ADD COLUMN activeWeeks TEXT NOT NULL DEFAULT ''"
                 )
+            }
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS timetables " +
+                        "(id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, name TEXT NOT NULL)"
+                )
+                db.execSQL("INSERT INTO timetables (id, name) VALUES (1, '我的课表')")
+                db.execSQL(
+                    "ALTER TABLE courses ADD COLUMN timetableId INTEGER NOT NULL DEFAULT 1"
+                )
+            }
+        }
+
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE courses ADD COLUMN customStartMinutes INTEGER")
+                db.execSQL("ALTER TABLE courses ADD COLUMN customEndMinutes INTEGER")
             }
         }
     }

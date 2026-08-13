@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CourseDao {
-    @Query("SELECT * FROM courses ORDER BY weekDay, startSection, name")
-    fun observeAll(): Flow<List<CourseEntity>>
+    @Query("SELECT * FROM courses WHERE timetableId = :timetableId ORDER BY weekDay, startSection, name")
+    fun observeForTimetable(timetableId: Long): Flow<List<CourseEntity>>
 
     @Query("SELECT COUNT(*) FROM courses")
     suspend fun count(): Int

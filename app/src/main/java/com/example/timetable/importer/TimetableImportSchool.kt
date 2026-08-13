@@ -9,6 +9,10 @@ enum class TimetableImportSchool(
     BEIJING_UNIVERSITY_OF_CHEMICAL_TECHNOLOGY(
         displayName = "北京化工大学",
         acceptedMimeTypes = arrayOf("application/pdf")
+    ),
+    NORTHEAST_NORMAL_UNIVERSITY(
+        displayName = "东北师范大学",
+        acceptedMimeTypes = arrayOf("application/pdf")
     )
 }
 

@@ -18,7 +18,10 @@ data class CourseEntity(
     val startWeek: Int,
     val endWeek: Int,
     val weekType: String,
-    val activeWeeks: String
+    val activeWeeks: String,
+    val timetableId: Long,
+    val customStartMinutes: Int?,
+    val customEndMinutes: Int?
 )
 
 fun CourseEntity.toDomain(): Course {
@@ -42,11 +45,13 @@ fun CourseEntity.toDomain(): Course {
     weekDay = weekDay,
     startSection = startSection,
     endSection = endSection,
-    activeWeeks = parsedActiveWeeks
+    activeWeeks = parsedActiveWeeks,
+    customStartMinutes = customStartMinutes,
+    customEndMinutes = customEndMinutes
     )
 }
 
-fun Course.toEntity(): CourseEntity = CourseEntity(
+fun Course.toEntity(timetableId: Long): CourseEntity = CourseEntity(
     id = id,
     name = name,
     teacher = teacher,
@@ -57,5 +62,8 @@ fun Course.toEntity(): CourseEntity = CourseEntity(
     startWeek = startWeek,
     endWeek = endWeek,
     weekType = WeekType.EVERY_WEEK.name,
-    activeWeeks = activeWeeks.sorted().joinToString(",")
+    activeWeeks = activeWeeks.sorted().joinToString(","),
+    timetableId = timetableId,
+    customStartMinutes = customStartMinutes,
+    customEndMinutes = customEndMinutes
 )
