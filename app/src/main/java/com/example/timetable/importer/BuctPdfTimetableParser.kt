@@ -9,12 +9,20 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import com.tom_roush.pdfbox.text.TextPosition
 import java.io.InputStream
+import kotlin.math.floor
 
 data class ParsedTimetable(
     val title: String?,
     val semester: String?,
     val courses: List<Course>,
-    val warnings: List<String>
+    val warnings: List<String>,
+    val groups: List<ParsedTimetableGroup> = emptyList()
+)
+
+data class ParsedTimetableGroup(
+    val name: String,
+    val courses: List<Course>,
+    val warnings: List<String> = emptyList()
 )
 
 class BuctPdfTimetableParser(private val context: Context) : TimetableFileParser {
@@ -75,7 +83,11 @@ class BuctPdfTimetableParser(private val context: Context) : TimetableFileParser
         override fun startPage(page: com.tom_roush.pdfbox.pdmodel.PDPage) {
             super.startPage(page)
             pageNumber += 1
-            pageWidth = page.cropBox.width
+            pageWidth = displayedPageWidth(
+                width = page.cropBox.width,
+                height = page.cropBox.height,
+                rotation = page.rotation
+            )
         }
 
         override fun processTextPosition(text: TextPosition) {
@@ -88,7 +100,9 @@ class BuctPdfTimetableParser(private val context: Context) : TimetableFileParser
             )
             allCharacters += item
             val normalizedX = text.xDirAdj / pageWidth
-            val dayIndex = ((normalizedX - TABLE_START_RATIO) / DAY_WIDTH_RATIO).toInt()
+            val dayIndex = floor(
+                (normalizedX - TABLE_START_RATIO) / DAY_WIDTH_RATIO
+            ).toInt()
             if (dayIndex in WEEK_DAYS.indices) positionedCharacters[dayIndex] += item
         }
 
@@ -116,6 +130,9 @@ class BuctPdfTimetableParser(private val context: Context) : TimetableFileParser
         private val WEEK_DAYS = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
         private const val TABLE_START_RATIO = 0.118f
         private const val DAY_WIDTH_RATIO = 0.1235f
+
+        internal fun displayedPageWidth(width: Float, height: Float, rotation: Int): Float =
+            if (Math.floorMod(rotation, 180) == 90) height else width
 
         internal fun parseCourseColumn(
             text: String,

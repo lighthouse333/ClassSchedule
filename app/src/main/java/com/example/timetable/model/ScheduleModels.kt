@@ -18,7 +18,9 @@ data class Course(
     val weekDay: String,
     val startSection: Int,
     val endSection: Int,
-    val activeWeeks: Set<Int>
+    val activeWeeks: Set<Int>,
+    val customStartMinutes: Int? = null,
+    val customEndMinutes: Int? = null
 ) {
     val startWeek: Int
         get() = activeWeeks.min()
@@ -31,10 +33,24 @@ data class Course(
         require(endSection in startSection..12) { "结束节次不能早于开始节次" }
         require(activeWeeks.isNotEmpty()) { "课程至少需要一个有效周次" }
         require(activeWeeks.all { it >= 1 }) { "有效周次必须大于 0" }
+        require((customStartMinutes == null) == (customEndMinutes == null)) {
+            "自定义开始和结束时间必须同时设置"
+        }
+        if (customStartMinutes != null && customEndMinutes != null) {
+            require(customStartMinutes in 0..1439) { "自定义开始时间无效" }
+            require(customEndMinutes in 1..1440) { "自定义结束时间无效" }
+            require(customEndMinutes > customStartMinutes) { "结束时间必须晚于开始时间" }
+        }
     }
 }
 
 fun Course.isActiveInWeek(week: Int): Boolean = week in activeWeeks
+
+fun Course.effectiveStartMinutes(periods: List<ClassPeriod>): Int =
+    customStartMinutes ?: periods[startSection - 1].startMinutes
+
+fun Course.effectiveEndMinutes(periods: List<ClassPeriod>): Int =
+    customEndMinutes ?: periods[endSection - 1].endMinutes
 
 fun weekSchedulesOverlap(
     firstActiveWeeks: Set<Int>,

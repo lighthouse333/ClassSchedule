@@ -1,5 +1,12 @@
 package com.example.timetable.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -8,19 +15,25 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,17 +42,21 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.timetable.model.Course
 import com.example.timetable.importer.TimetableImportSchool
 import com.example.timetable.model.formatActiveWeeks
 import com.example.timetable.model.isActiveInWeek
+import kotlinx.coroutines.launch
 
 @Composable
 fun TimetableScreen(
@@ -49,6 +66,9 @@ fun TimetableScreen(
     val weekDays = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
     val courses by viewModel.courses.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val timetables by viewModel.timetables.collectAsState()
+    val currentTimetable by viewModel.currentTimetable.collectAsState()
+    val selectedTimetableId by viewModel.selectedTimetableId.collectAsState()
     val pdfImportState by viewModel.pdfImportState.collectAsState()
     var selectedImportSchool by remember { mutableStateOf<TimetableImportSchool?>(null) }
     val pdfPicker = rememberLauncherForActivityResult(
@@ -65,7 +85,12 @@ fun TimetableScreen(
     var showTimeSettingsDialog by remember { mutableStateOf(false) }
     var showSemesterSettingsDialog by remember { mutableStateOf(false) }
     var showImportSchoolDialog by remember { mutableStateOf(false) }
+    var showTimetableDialog by remember { mutableStateOf(false) }
+    var showCreateTimetableDialog by remember { mutableStateOf(false) }
     var showTopMenu by remember { mutableStateOf(false) }
+    var pendingCourseSelection by remember { mutableStateOf<CourseSelection?>(null) }
+    var dragCourseSelection by remember { mutableStateOf<CourseSelection?>(null) }
+    var selectionAwaitingConfirmation by remember { mutableStateOf<CourseSelection?>(null) }
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
     var coursePendingDeletion by remember { mutableStateOf<Course?>(null) }
     var currentWeek by remember { mutableStateOf(1) }
@@ -73,9 +98,27 @@ fun TimetableScreen(
     val semesterStart = settings.semesterStart
     val totalWeeks = settings.totalWeeks
     val classPeriods = settings.classPeriods
-
+    val pagerState = rememberPagerState(initialPage = 0) { totalWeeks }
+    val coroutineScope = rememberCoroutineScope()
     LaunchedEffect(totalWeeks) {
-        currentWeek = currentWeek.coerceIn(1, totalWeeks)
+        val page = pagerState.currentPage.coerceIn(0, totalWeeks - 1)
+        if (page != pagerState.currentPage) pagerState.scrollToPage(page)
+        currentWeek = page + 1
+    }
+
+    LaunchedEffect(selectedTimetableId) {
+        pagerState.scrollToPage(0)
+        currentWeek = 1
+        selectedCourse = null
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        currentWeek = pagerState.currentPage + 1
+    }
+
+    LaunchedEffect(currentWeek) {
+        selectionAwaitingConfirmation = null
+        dragCourseSelection = null
     }
 
     Column(
@@ -86,21 +129,28 @@ fun TimetableScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp),
+                .height(32.dp)
+                .padding(bottom = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "我的课表",
-                fontSize = 24.sp,
+                text = currentTimetable?.name ?: "我的课表",
+                fontSize = 18.sp,
+                lineHeight = 20.sp,
                 fontWeight = FontWeight.Bold
             )
 
             Box {
-                TextButton(onClick = { showTopMenu = true }) {
+                TextButton(
+                    onClick = { showTopMenu = true },
+                    modifier = Modifier.height(28.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
                     Text(
                         text = "⋮",
-                        fontSize = 28.sp,
+                        fontSize = 20.sp,
+                        lineHeight = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -109,9 +159,17 @@ fun TimetableScreen(
                     onDismissRequest = { showTopMenu = false }
                 ) {
                     DropdownMenuItem(
+                        text = { Text("切换或新建课表") },
+                        onClick = {
+                            showTopMenu = false
+                            showTimetableDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text("添加课程") },
                         onClick = {
                             showTopMenu = false
+                            pendingCourseSelection = null
                             showAddDialog = true
                         }
                     )
@@ -145,6 +203,32 @@ fun TimetableScreen(
                     )
                 }
             }
+        }
+
+        if (showTimetableDialog) {
+            TimetableSelectionDialog(
+                timetables = timetables,
+                selectedTimetableId = selectedTimetableId,
+                onDismiss = { showTimetableDialog = false },
+                onSelect = { timetableId ->
+                    viewModel.selectTimetable(timetableId)
+                    showTimetableDialog = false
+                },
+                onCreate = {
+                    showTimetableDialog = false
+                    showCreateTimetableDialog = true
+                }
+            )
+        }
+
+        if (showCreateTimetableDialog) {
+            CreateTimetableDialog(
+                onDismiss = { showCreateTimetableDialog = false },
+                onCreate = { name ->
+                    viewModel.createTimetable(name)
+                    showCreateTimetableDialog = false
+                }
+            )
         }
 
         if (showImportSchoolDialog) {
@@ -208,15 +292,23 @@ fun TimetableScreen(
         }
 
         if (showAddDialog) {
+            val selection = pendingCourseSelection
             AddCourseDialog(
                 weekDays = weekDays,
                 courses = courses,
-                maxSection = sectionCount,
+                classPeriods = classPeriods,
                 totalWeeks = totalWeeks,
-                onDismiss = { showAddDialog = false },
+                initialWeekDay = selection?.weekDay.orEmpty(),
+                initialStartSection = selection?.startSection,
+                initialEndSection = selection?.endSection,
+                onDismiss = {
+                    showAddDialog = false
+                    pendingCourseSelection = null
+                },
                 onAddCourse = { course ->
                     viewModel.addCourse(course)
                     showAddDialog = false
+                    pendingCourseSelection = null
                 }
             )
         }
@@ -269,7 +361,7 @@ fun TimetableScreen(
                 course = courseToEdit,
                 weekDays = weekDays,
                 courses = courses,
-                maxSection = sectionCount,
+                classPeriods = classPeriods,
                 totalWeeks = totalWeeks,
                 onDismiss = { selectedCourse = null },
                 onDeleteRequest = {
@@ -318,26 +410,45 @@ fun TimetableScreen(
             )
         }
 
-        val displayedWeekStart = semesterStart.plusWeeks((currentWeek - 1).toLong())
-        val displayedWeekEnd = displayedWeekStart.plusDays(6)
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            TextButton(enabled = currentWeek > 1, onClick = { currentWeek-- }) {
+            TextButton(
+                enabled = pagerState.canScrollBackward,
+                onClick = {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                    }
+                }
+            ) {
                 Text("上一周")
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "第 $currentWeek 周", fontWeight = FontWeight.Bold)
-                Text(
-                    text = "${formatDate(displayedWeekStart)}—${formatDate(displayedWeekEnd)}",
-                    fontSize = 11.sp,
-                    color = Color.Gray
-                )
+                AnimatedContent(
+                    targetState = currentWeek,
+                    transitionSpec = {
+                        val direction = if (targetState > initialState) 1 else -1
+                        (slideInHorizontally(tween(260)) { it * direction } + fadeIn(tween(180)))
+                            .togetherWith(
+                                slideOutHorizontally(tween(260)) { -it * direction } +
+                                    fadeOut(tween(180))
+                            )
+                    },
+                    label = "week-number"
+                ) { week ->
+                    Text(text = "第 $week 周", fontWeight = FontWeight.Bold)
+                }
             }
-            TextButton(enabled = currentWeek < totalWeeks, onClick = { currentWeek++ }) {
+            TextButton(
+                enabled = pagerState.canScrollForward,
+                onClick = {
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                    }
+                }
+            ) {
                 Text("下一周")
             }
         }
@@ -349,17 +460,25 @@ fun TimetableScreen(
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-        ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f),
+            beyondViewportPageCount = 1,
+            key = { it }
+        ) { page ->
+            val displayedWeek = page + 1
+            val displayedWeekStart = semesterStart.plusWeeks((displayedWeek - 1).toLong())
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+            ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
+                    .height(60.dp)
             ) {
-                TimetableHeaderCell(text = "节次", modifier = Modifier.weight(0.85f))
+                TimetableHeaderCell(text = "节次", modifier = Modifier.weight(0.425f))
                 for ((dayIndex, day) in weekDays.withIndex()) {
                     val date = displayedWeekStart.plusDays(dayIndex.toLong())
                     TimetableHeaderCell(
@@ -369,36 +488,230 @@ fun TimetableScreen(
                 }
             }
 
-            for (section in 1..sectionCount) {
-                val period = classPeriods[section - 1]
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(88.dp)
-                ) {
-                    TimetableSectionCell(
-                        section = section,
-                        startTime = formatMinutesAsTime(period.startMinutes),
-                        endTime = formatMinutesAsTime(period.endMinutes),
-                        modifier = Modifier.weight(0.85f)
-                    )
-                    for (day in weekDays) {
-                        val course = courses.find {
-                            it.weekDay == day &&
-                                section in it.startSection..it.endSection &&
-                                it.isActiveInWeek(currentWeek)
-                        }
-                        TimetableCourseCell(
-                            course = course,
+            val sectionHeight = 88.dp
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(sectionHeight * sectionCount)
+            ) {
+                Column(modifier = Modifier.weight(0.425f)) {
+                    for (section in 1..sectionCount) {
+                        val period = classPeriods[section - 1]
+                        TimetableSectionCell(
                             section = section,
-                            onCourseClick = { selectedCourse = it },
-                            modifier = Modifier.weight(1f)
+                            startTime = formatMinutesAsTime(period.startMinutes),
+                            endTime = formatMinutesAsTime(period.endMinutes),
+                            modifier = Modifier.height(sectionHeight)
                         )
+                    }
+                }
+                for (day in weekDays) {
+                    val occupiedSections = courses
+                        .filter { it.weekDay == day && it.isActiveInWeek(displayedWeek) }
+                        .flatMap { it.startSection..it.endSection }
+                        .toSet()
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .pointerInput(day, displayedWeek, occupiedSections, sectionCount) {
+                                var anchorSection = 1
+                                var latestSelection: CourseSelection? = null
+                                fun sectionAt(y: Float): Int =
+                                    ((y / size.height.coerceAtLeast(1)) * sectionCount)
+                                        .toInt()
+                                        .plus(1)
+                                        .coerceIn(1, sectionCount)
+
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { offset ->
+                                        selectionAwaitingConfirmation = null
+                                        anchorSection = sectionAt(offset.y)
+                                        latestSelection = emptySectionSelection(
+                                            day,
+                                            anchorSection,
+                                            anchorSection,
+                                            occupiedSections
+                                        )
+                                        dragCourseSelection = latestSelection
+                                    },
+                                    onDrag = { change, _ ->
+                                        latestSelection = emptySectionSelection(
+                                            day,
+                                            anchorSection,
+                                            sectionAt(change.position.y),
+                                            occupiedSections
+                                        )
+                                        dragCourseSelection = latestSelection
+                                    },
+                                    onDragEnd = {
+                                        latestSelection?.let { selection ->
+                                            selectionAwaitingConfirmation = selection
+                                        }
+                                        dragCourseSelection = null
+                                    },
+                                    onDragCancel = {
+                                        dragCourseSelection = null
+                                    }
+                                )
+                            }
+                    ) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            repeat(sectionCount) { sectionIndex ->
+                                val section = sectionIndex + 1
+                                TimetableEmptyCell(
+                                    onClick = {
+                                        if (selectionAwaitingConfirmation != null) {
+                                            selectionAwaitingConfirmation = null
+                                        } else if (section !in occupiedSections) {
+                                            pendingCourseSelection = CourseSelection(
+                                                weekDay = day,
+                                                startSection = section,
+                                                endSection = section
+                                            )
+                                            showAddDialog = true
+                                        }
+                                    },
+                                    modifier = Modifier.height(sectionHeight)
+                                )
+                            }
+                        }
+                        (dragCourseSelection ?: selectionAwaitingConfirmation)
+                            ?.takeIf { it.weekDay == day }
+                            ?.let { selection ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .offset(
+                                            y = sectionHeight * (selection.startSection - 1)
+                                        )
+                                        .height(
+                                            sectionHeight * (
+                                                selection.endSection -
+                                                    selection.startSection + 1
+                                                )
+                                        )
+                                        .padding(2.dp)
+                                        .background(
+                                            if (dragCourseSelection != null) {
+                                                Color(0x995C6BC0)
+                                            } else {
+                                                Color(0xCC66BB6A)
+                                            },
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .clickable(
+                                            enabled = dragCourseSelection == null,
+                                            onClick = {
+                                                pendingCourseSelection = selection
+                                                selectionAwaitingConfirmation = null
+                                                showAddDialog = true
+                                            }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (dragCourseSelection == null) {
+                                        Text(
+                                            text = "确认添加\n✓",
+                                            fontSize = 9.sp,
+                                            lineHeight = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF1B5E20)
+                                        )
+                                    }
+                                }
+                            }
+                        courses.filter {
+                            it.weekDay == day && it.isActiveInWeek(displayedWeek)
+                        }.forEach { course ->
+                            val startOffset = courseStartRowOffset(course, classPeriods)
+                            val endOffset = courseEndRowOffset(course, classPeriods)
+                            TimetableCourseBlock(
+                                course = course,
+                                onCourseClick = {
+                                    if (selectionAwaitingConfirmation != null) {
+                                        selectionAwaitingConfirmation = null
+                                    } else {
+                                        selectedCourse = it
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .offset(y = sectionHeight * startOffset)
+                                    .height(
+                                        sectionHeight * (endOffset - startOffset).coerceAtLeast(0.2f)
+                                    )
+                            )
+                        }
                     }
                 }
             }
         }
+        }
     }
+}
+
+@Composable
+private fun TimetableSelectionDialog(
+    timetables: List<com.example.timetable.data.TimetableEntity>,
+    selectedTimetableId: Long,
+    onDismiss: () -> Unit,
+    onSelect: (Long) -> Unit,
+    onCreate: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择课表") },
+        text = {
+            Column {
+                timetables.forEach { timetable ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = timetable.id == selectedTimetableId,
+                            onCheckedChange = { checked ->
+                                if (checked) onSelect(timetable.id)
+                            }
+                        )
+                        Text(timetable.name)
+                    }
+                }
+                TextButton(onClick = onCreate, modifier = Modifier.fillMaxWidth()) {
+                    Text("新建课表")
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+@Composable
+private fun CreateTimetableDialog(
+    onDismiss: () -> Unit,
+    onCreate: (String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("新建课表") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("课表名称") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = { onCreate(name.trim()) }
+            ) {
+                Text("创建")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
 }
 
 @Composable
@@ -437,38 +750,54 @@ private fun PdfRecognitionResultDialog(
     onDismiss: () -> Unit,
     onImport: (List<Course>) -> Unit
 ) {
-    val duplicateIndices = remember(result, existingCourses) {
-        result.courses.indices.filterTo(mutableSetOf()) { index ->
+    var selectedGroupIndex by remember(result) { mutableStateOf(0) }
+    val selectedGroup = result.groups.getOrNull(selectedGroupIndex)
+    val displayedCourses = selectedGroup?.courses ?: result.courses
+    val displayedWarnings = result.warnings + (selectedGroup?.warnings ?: emptyList())
+    val duplicateIndices = remember(displayedCourses, existingCourses) {
+        displayedCourses.indices.filterTo(mutableSetOf()) { index ->
             existingCourses.any { existing ->
-                coursesAreDuplicates(result.courses[index], existing)
+                coursesAreDuplicates(displayedCourses[index], existing)
             }
         }
     }
-    val conflictIndices = remember(result, existingCourses) {
-        result.courses.indices.filterTo(mutableSetOf()) { index ->
-            val course = result.courses[index]
+    val conflictIndices = remember(displayedCourses, existingCourses) {
+        displayedCourses.indices.filterTo(mutableSetOf()) { index ->
+            val course = displayedCourses[index]
             existingCourses.any { existing -> coursesConflict(course, existing) } ||
-                result.courses.indices.any { otherIndex ->
-                    otherIndex != index && coursesConflict(course, result.courses[otherIndex])
+                displayedCourses.indices.any { otherIndex ->
+                    otherIndex != index && coursesConflict(course, displayedCourses[otherIndex])
                 }
         }
     }
-    var selectedIndices by remember(result, duplicateIndices) {
-        mutableStateOf(result.courses.indices.filterNot(duplicateIndices::contains).toSet())
+    var selectedIndices by remember(displayedCourses, duplicateIndices) {
+        mutableStateOf(displayedCourses.indices.filterNot(duplicateIndices::contains).toSet())
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("识别到 ${result.courses.size} 门课程") },
+        title = { Text("识别到 ${displayedCourses.size} 门课程") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 result.semester?.let { Text(it, fontWeight = FontWeight.Bold) }
+                if (result.groups.size > 1) {
+                    Text("请选择班级", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                    result.groups.forEachIndexed { index, group ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = selectedGroupIndex == index,
+                                onCheckedChange = { checked -> if (checked) selectedGroupIndex = index }
+                            )
+                            Text(group.name)
+                        }
+                    }
+                }
                 Text(
                     "请选择需要导入的课程。重复课程已自动取消选择。",
                     color = Color.Gray,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
-                result.courses.forEachIndexed { index, course ->
+                displayedCourses.forEachIndexed { index, course ->
                     val duplicate = index in duplicateIndices
                     val conflict = index in conflictIndices && !duplicate
                     Row(verticalAlignment = Alignment.Top) {
@@ -497,7 +826,7 @@ private fun PdfRecognitionResultDialog(
                         }
                     }
                 }
-                result.warnings.forEach { warning ->
+                displayedWarnings.forEach { warning ->
                     Text("提示：$warning", color = Color.Red, fontSize = 12.sp)
                 }
             }
@@ -506,7 +835,7 @@ private fun PdfRecognitionResultDialog(
             TextButton(
                 enabled = selectedIndices.isNotEmpty(),
                 onClick = {
-                    onImport(selectedIndices.sorted().map(result.courses::get))
+                    onImport(selectedIndices.sorted().map(displayedCourses::get))
                 }
             ) {
                 Text("导入所选（${selectedIndices.size}）")
@@ -541,7 +870,23 @@ private fun TimetableHeaderCell(text: String, modifier: Modifier = Modifier) {
             .background(Color(0xFFE8EAF6), RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = text, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        val lines = text.split('\n', limit = 2)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = lines.first(),
+                fontSize = 11.sp,
+                lineHeight = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+            lines.getOrNull(1)?.let { date ->
+                Text(
+                    text = date,
+                    fontSize = 9.sp,
+                    lineHeight = 10.sp,
+                    color = Color.Gray
+                )
+            }
+        }
     }
 }
 
@@ -559,18 +904,35 @@ private fun TimetableSectionCell(
             .background(Color(0xFFF5F5F5), RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "第${section}节", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Text(text = startTime, fontSize = 8.sp)
-            Text(text = endTime, fontSize = 8.sp)
-        }
+        Text(
+            text = "$section\n$startTime\n$endTime",
+            fontSize = 5.5.sp,
+            lineHeight = 6.5.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            softWrap = false
+        )
     }
 }
 
 @Composable
-private fun TimetableCourseCell(
-    course: Course?,
-    section: Int,
+private fun TimetableEmptyCell(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(2.dp)
+            .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(6.dp))
+            .background(Color.White, RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+    )
+}
+
+@Composable
+private fun TimetableCourseBlock(
+    course: Course,
     onCourseClick: (Course) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -580,23 +942,94 @@ private fun TimetableCourseCell(
             .padding(2.dp)
             .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(6.dp))
             .background(
-                if (course == null) Color.White else Color(0xFFC5CAE9),
+                courseColor(course),
                 RoundedCornerShape(6.dp)
             )
-            .clickable(enabled = course != null) { course?.let(onCourseClick) }
+            .clickable { onCourseClick(course) }
             .padding(4.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (course != null && section == course.startSection) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(text = course.name, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                Text(text = course.classroom, fontSize = 8.sp)
-                Text(text = course.teacher, fontSize = 8.sp)
-                Text(text = "${course.startSection}-${course.endSection}节", fontSize = 8.sp)
-            }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = course.name,
+                fontSize = 9.sp,
+                lineHeight = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = listOf(
+                    course.classroom,
+                    course.teacher,
+                    course.customStartMinutes?.let { start ->
+                        "${formatMinutesAsTime(start)}-${formatMinutesAsTime(requireNotNull(course.customEndMinutes))}"
+                    } ?: "${course.startSection}-${course.endSection}节"
+                ).filter(String::isNotBlank).joinToString("\n"),
+                fontSize = 8.sp,
+                lineHeight = 9.sp
+            )
         }
     }
+}
+
+private data class CourseSelection(
+    val weekDay: String,
+    val startSection: Int,
+    val endSection: Int
+)
+
+private fun emptySectionSelection(
+    weekDay: String,
+    anchor: Int,
+    current: Int,
+    occupiedSections: Set<Int>
+): CourseSelection? {
+    if (anchor in occupiedSections) return null
+    val direction = if (current >= anchor) 1 else -1
+    var edge = anchor
+    var candidate = anchor
+    while (candidate != current) {
+        candidate += direction
+        if (candidate in occupiedSections) break
+        edge = candidate
+    }
+    return CourseSelection(
+        weekDay = weekDay,
+        startSection = minOf(anchor, edge),
+        endSection = maxOf(anchor, edge)
+    )
+}
+
+private fun courseStartRowOffset(
+    course: Course,
+    periods: List<com.example.timetable.model.ClassPeriod>
+): Float = course.customStartMinutes?.let { minuteToRowOffset(it, periods) }
+    ?: (course.startSection - 1).toFloat()
+
+private fun courseEndRowOffset(
+    course: Course,
+    periods: List<com.example.timetable.model.ClassPeriod>
+): Float = course.customEndMinutes?.let { minuteToRowOffset(it, periods) }
+    ?: course.endSection.toFloat()
+
+private fun minuteToRowOffset(
+    minutes: Int,
+    periods: List<com.example.timetable.model.ClassPeriod>
+): Float {
+    periods.forEachIndexed { index, period ->
+        if (minutes <= period.startMinutes) return index.toFloat()
+        if (minutes <= period.endMinutes) {
+            val progress = (minutes - period.startMinutes).toFloat() /
+                (period.endMinutes - period.startMinutes)
+            return index + progress
+        }
+    }
+    return periods.size.toFloat()
+}
+
+private fun courseColor(course: Course): Color {
+    val hue = Math.floorMod(course.name.hashCode(), 360).toFloat()
+    return Color.hsl(hue = hue, saturation = 0.34f, lightness = 0.82f)
 }
