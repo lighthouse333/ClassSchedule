@@ -74,6 +74,25 @@
 
 APK 将生成在 `app/build/outputs/apk/debug/app-debug.apk`。
 
+## 正式签名构建
+
+正式签名信息从项目根目录的 `keystore.properties` 读取，该文件已被 Git 忽略。文件格式如下：
+
+```properties
+storeFile=C:/path/to/classschedule-release.jks
+storePassword=本地密钥库密码
+keyAlias=classschedule
+keyPassword=本地密钥密码
+```
+
+配置完成后执行：
+
+```powershell
+.\gradlew.bat clean testDebugUnitTest assembleRelease
+```
+
+正式签名 APK 将生成在 `app/build/outputs/apk/release/app-release.apk`。签名文件和密码不得提交到 GitHub。
+
 ## 当前状态
 
 当前正式版本为 `v1.0.0`。北京化工大学与东北师范大学 PDF 导入、教学周自动定位和新应用图标均已完成真机测试。
