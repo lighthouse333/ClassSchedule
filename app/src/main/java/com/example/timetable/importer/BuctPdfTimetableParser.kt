@@ -153,17 +153,17 @@ class BuctPdfTimetableParser(private val context: Context) : TimetableFileParser
                 val blockEnd = markers.getOrNull(index + 1)?.range?.first ?: normalized.length
                 val compactBlock = normalized.substring(match.range.first, blockEnd)
                     .replace(Regex("\\s+"), "")
-                val details = Regex(
-                    "\\(\\d+-\\d+节\\)(.+?)周/校区:([^/]*)/场地:([^/]*)/教师:([^/]*)/教学班:"
-                ).find(compactBlock)
-                if (details == null) {
-                    warnings += "$weekDay ${match.groupValues[1].trim()}：课程信息不完整"
+                val weeksText = Regex("\\(\\d+-\\d+节\\)([^/]+)")
+                    .find(compactBlock)
+                    ?.groupValues
+                    ?.get(1)
+                if (weeksText == null) {
+                    warnings += "$weekDay ${match.groupValues[1].trim()}：缺少周次信息"
                     return@mapIndexedNotNull null
                 }
                 val name = match.groupValues[1].trim()
                 val startSection = match.groupValues[2].toInt()
                 val endSection = match.groupValues[3].toInt()
-                val weeksText = details.groupValues[1]
                 val activeWeeks = parseActiveWeeks(weeksText, totalWeeks)
                 if (activeWeeks == null) {
                     warnings += "$weekDay $name：无法识别周次“$weeksText”"
@@ -175,8 +175,8 @@ class BuctPdfTimetableParser(private val context: Context) : TimetableFileParser
                 }
                 Course(
                     name = name,
-                    teacher = details.groupValues[4].trim(),
-                    classroom = details.groupValues[3].trim(),
+                    teacher = extractField(compactBlock, "教师") ?: "无",
+                    classroom = extractField(compactBlock, "场地") ?: "无",
                     weekDay = weekDay,
                     startSection = startSection,
                     endSection = endSection,
@@ -184,5 +184,13 @@ class BuctPdfTimetableParser(private val context: Context) : TimetableFileParser
                 )
             }.toList()
         }
+
+        private fun extractField(block: String, fieldName: String): String? = Regex(
+            "(?:^|/)${Regex.escape(fieldName)}:([^/]*)"
+        ).find(block)
+            ?.groupValues
+            ?.get(1)
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
     }
 }

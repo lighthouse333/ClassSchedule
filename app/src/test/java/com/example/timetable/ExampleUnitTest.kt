@@ -3,6 +3,7 @@ package com.example.timetable
 import com.example.timetable.model.Course
 import com.example.timetable.model.WeekType
 import com.example.timetable.model.createActiveWeeks
+import com.example.timetable.model.findWeekContainingDate
 import com.example.timetable.model.formatActiveWeeks
 import com.example.timetable.model.parseActiveWeeks
 import com.example.timetable.model.weekSchedulesOverlap
@@ -14,8 +15,27 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
 
 class ExampleUnitTest {
+    @Test
+    fun findsWeekUsingDisplayedDateRangesAndClampsOutsideSemester() {
+        val semesterStart = LocalDate.of(2026, 9, 7)
+
+        assertEquals(
+            1,
+            findWeekContainingDate(LocalDate.of(2026, 8, 13), semesterStart, 20)
+        )
+        assertEquals(
+            3,
+            findWeekContainingDate(LocalDate.of(2026, 9, 21), semesterStart, 20)
+        )
+        assertEquals(
+            20,
+            findWeekContainingDate(LocalDate.of(2027, 2, 1), semesterStart, 20)
+        )
+    }
+
     @Test
     fun parsesMultipleWeekRanges() {
         assertEquals(
@@ -118,6 +138,58 @@ class ExampleUnitTest {
         assertEquals("一教B阶-303", courses.single().classroom)
         assertEquals("李志强", courses.single().teacher)
         assertEquals(((1..9) + (11..16)).toSet(), courses.single().activeWeeks)
+    }
+
+    @Test
+    fun parsesBuctStudentCourseWithoutTeacherField() {
+        val courses = BuctPdfTimetableParser.parseCourseColumn(
+            text = """
+                电子技术实验（Ⅰ）○
+                (1-4节)11-18周/校区:北区
+                /场地:未排地点/教学班:电子技术实验（Ⅰ）-0008
+                /教学班组成:电科2501;电科2502/课程学时组成:实验:32
+            """.trimIndent(),
+            weekDay = "周四",
+            totalWeeks = 20
+        )
+
+        assertEquals(1, courses.size)
+        assertEquals("电子技术实验(Ⅰ)", courses.single().name)
+        assertEquals("未排地点", courses.single().classroom)
+        assertEquals("无", courses.single().teacher)
+        assertEquals((11..18).toSet(), courses.single().activeWeeks)
+    }
+
+    @Test
+    fun parsesBuctFieldsIndependentlyOfTheirOrder() {
+        val courses = BuctPdfTimetableParser.parseCourseColumn(
+            text = """
+                字段乱序课程★
+                (3-5节)1-4周/教学班:字段乱序课程-0001
+                /教师:张老师/校区:北区/场地:一教101
+            """.trimIndent(),
+            weekDay = "周二",
+            totalWeeks = 20
+        )
+
+        assertEquals(1, courses.size)
+        assertEquals("张老师", courses.single().teacher)
+        assertEquals("一教101", courses.single().classroom)
+        assertEquals(3, courses.single().startSection)
+        assertEquals(5, courses.single().endSection)
+    }
+
+    @Test
+    fun fillsMissingBuctOptionalFieldsWithNone() {
+        val courses = BuctPdfTimetableParser.parseCourseColumn(
+            text = "缺少可选字段课程★\n(6-7节)2-3周/教学班:课程-0001",
+            weekDay = "周三",
+            totalWeeks = 20
+        )
+
+        assertEquals(1, courses.size)
+        assertEquals("无", courses.single().teacher)
+        assertEquals("无", courses.single().classroom)
     }
 
     @Test
