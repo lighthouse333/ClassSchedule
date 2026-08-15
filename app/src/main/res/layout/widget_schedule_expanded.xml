@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="10dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginEnd="5dp"
+        android:layout_weight="1"
+        android:background="@drawable/widget_course_background"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView android:id="@+id/current_label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/widget_current_course" android:textColor="#6750A4" android:textSize="12sp" android:textStyle="bold" />
+        <TextView android:id="@+id/current_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:autoSizeMaxTextSize="16sp" android:autoSizeMinTextSize="10sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:ellipsize="end" android:maxLines="1" android:text="暂无课程" android:textColor="#1D1B20" android:textSize="16sp" android:textStyle="bold" />
+        <TextView android:id="@+id/current_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoSizeMaxTextSize="12sp" android:autoSizeMinTextSize="9sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:ellipsize="end" android:maxLines="1" android:textColor="#49454F" android:textSize="12sp" />
+        <TextView android:id="@+id/current_place" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoSizeMaxTextSize="12sp" android:autoSizeMinTextSize="9sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:ellipsize="end" android:maxLines="1" android:textColor="#49454F" android:textSize="12sp" />
+        <TextView android:id="@+id/current_teacher" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoSizeMaxTextSize="12sp" android:autoSizeMinTextSize="9sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:ellipsize="end" android:maxLines="1" android:textColor="#49454F" android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="5dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView android:id="@+id/next_label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/widget_next_course" android:textColor="#6750A4" android:textSize="12sp" android:textStyle="bold" />
+        <TextView android:id="@+id/next_name" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:autoSizeMaxTextSize="16sp" android:autoSizeMinTextSize="10sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:ellipsize="end" android:maxLines="1" android:text="暂无课程" android:textColor="#1D1B20" android:textSize="16sp" android:textStyle="bold" />
+        <TextView android:id="@+id/next_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoSizeMaxTextSize="12sp" android:autoSizeMinTextSize="9sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:ellipsize="end" android:maxLines="1" android:textColor="#49454F" android:textSize="12sp" />
+        <TextView android:id="@+id/next_place" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoSizeMaxTextSize="12sp" android:autoSizeMinTextSize="9sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:ellipsize="end" android:maxLines="1" android:textColor="#49454F" android:textSize="12sp" />
+        <TextView android:id="@+id/next_teacher" android:layout_width="match_parent" android:layout_height="wrap_content" android:autoSizeMaxTextSize="12sp" android:autoSizeMinTextSize="9sp" android:autoSizeStepGranularity="1sp" android:autoSizeTextType="uniform" android:ellipsize="end" android:maxLines="1" android:textColor="#49454F" android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

@@ -18,6 +18,7 @@ import com.example.timetable.model.Course
 import com.example.timetable.model.ScheduleSettings
 import com.example.timetable.model.ClassPeriod
 import com.example.timetable.model.createDefaultScheduleSettings
+import com.example.timetable.widget.ScheduleWidgetController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,30 +100,35 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
     fun addCourse(course: Course) {
         viewModelScope.launch {
             repository.add(selectedTimetableId.value, course)
+            ScheduleWidgetController.updateAll(getApplication())
         }
     }
 
     fun updateCourse(course: Course) {
         viewModelScope.launch {
             repository.update(selectedTimetableId.value, course)
+            ScheduleWidgetController.updateAll(getApplication())
         }
     }
 
     fun deleteCourse(course: Course) {
         viewModelScope.launch {
             repository.delete(selectedTimetableId.value, course)
+            ScheduleWidgetController.updateAll(getApplication())
         }
     }
 
     fun saveSettings(settings: ScheduleSettings) {
         viewModelScope.launch {
             settingsRepository.save(selectedTimetableId.value, settings)
+            ScheduleWidgetController.updateAll(getApplication())
         }
     }
 
     fun selectTimetable(timetableId: Long) {
         viewModelScope.launch {
             settingsRepository.selectTimetable(timetableId)
+            ScheduleWidgetController.updateAll(getApplication())
         }
     }
 
@@ -132,6 +138,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val id = timetableRepository.create(cleanedName)
             settingsRepository.selectTimetable(id)
+            ScheduleWidgetController.updateAll(getApplication())
         }
     }
 
@@ -193,6 +200,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 }
                 repository.addAll(selectedTimetableId.value, importedCourses)
+                ScheduleWidgetController.updateAll(getApplication())
                 PdfImportState.Completed(importedCourses.size)
             } catch (error: Exception) {
                 PdfImportState.Error(error.message ?: "课程导入失败")
