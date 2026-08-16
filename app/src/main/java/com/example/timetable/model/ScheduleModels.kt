@@ -20,7 +20,8 @@ data class Course(
     val endSection: Int,
     val activeWeeks: Set<Int>,
     val customStartMinutes: Int? = null,
-    val customEndMinutes: Int? = null
+    val customEndMinutes: Int? = null,
+    val note: String = ""
 ) {
     val startWeek: Int
         get() = activeWeeks.min()

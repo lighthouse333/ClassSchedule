@@ -21,7 +21,8 @@ data class CourseEntity(
     val activeWeeks: String,
     val timetableId: Long,
     val customStartMinutes: Int?,
-    val customEndMinutes: Int?
+    val customEndMinutes: Int?,
+    val note: String
 )
 
 fun CourseEntity.toDomain(): Course {
@@ -47,7 +48,8 @@ fun CourseEntity.toDomain(): Course {
     endSection = endSection,
     activeWeeks = parsedActiveWeeks,
     customStartMinutes = customStartMinutes,
-    customEndMinutes = customEndMinutes
+    customEndMinutes = customEndMinutes,
+    note = note
     )
 }
 
@@ -65,5 +67,6 @@ fun Course.toEntity(timetableId: Long): CourseEntity = CourseEntity(
     activeWeeks = activeWeeks.sorted().joinToString(","),
     timetableId = timetableId,
     customStartMinutes = customStartMinutes,
-    customEndMinutes = customEndMinutes
+    customEndMinutes = customEndMinutes,
+    note = note
 )

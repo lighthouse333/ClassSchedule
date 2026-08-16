@@ -79,6 +79,59 @@ fun EditCourseDialog(
 }
 
 @Composable
+fun CourseDetailDialog(
+    course: Course,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onSaveNote: (String) -> Unit
+) {
+    var note by remember(course.id, course.note) { mutableStateOf(course.note) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(course.name) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                CourseDetailRow("教师", course.teacher)
+                CourseDetailRow("教室", course.classroom)
+                CourseDetailRow("星期", course.weekDay)
+                CourseDetailRow(
+                    "时间",
+                    course.customStartMinutes?.let { start ->
+                        "${formatMinutesAsTime(start)}-${formatMinutesAsTime(requireNotNull(course.customEndMinutes))}"
+                    } ?: "第 ${course.startSection}-${course.endSection} 节"
+                )
+                CourseDetailRow("周次", "${formatActiveWeeks(course.activeWeeks)} 周")
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("备忘") },
+                    minLines = 3,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Row {
+                TextButton(
+                    enabled = note != course.note,
+                    onClick = { onSaveNote(note) }
+                ) { Text("保存备忘") }
+                TextButton(onClick = onEdit) { Text("编辑课程") }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
+    )
+}
+
+@Composable
+private fun CourseDetailRow(label: String, value: String) {
+    Text(
+        text = "$label：${value.ifBlank { "无" }}",
+        modifier = Modifier.padding(vertical = 4.dp)
+    )
+}
+
+@Composable
 private fun CourseEditorDialog(
     title: String,
     originalCourse: Course?,
@@ -238,6 +291,7 @@ private fun CourseEditorDialog(
                         else -> {
                             onSaveCourse(
                                 Course(
+                                    id = originalCourse?.id ?: 0,
                                     name = name.trim(),
                                     teacher = teacher.trim(),
                                     classroom = classroom.trim(),
@@ -246,7 +300,8 @@ private fun CourseEditorDialog(
                                     endSection = end,
                                     activeWeeks = activeWeeks,
                                     customStartMinutes = customStart,
-                                    customEndMinutes = customEnd
+                                    customEndMinutes = customEnd,
+                                    note = originalCourse?.note.orEmpty()
                                 )
                             )
                             null

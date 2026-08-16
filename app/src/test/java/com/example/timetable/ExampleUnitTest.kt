@@ -10,6 +10,7 @@ import com.example.timetable.model.weekSchedulesOverlap
 import com.example.timetable.importer.BuctPdfTimetableParser
 import com.example.timetable.importer.NenuPdfTimetableParser
 import com.example.timetable.data.toEntity
+import com.example.timetable.data.toDomain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -115,6 +116,24 @@ class ExampleUnitTest {
         val entity = course.toEntity(timetableId = 1L)
         assertEquals(560, entity.customStartMinutes)
         assertEquals(650, entity.customEndMinutes)
+    }
+
+    @Test
+    fun preservesCourseNoteInStorage() {
+        val course = Course(
+            name = "测试课程",
+            teacher = "教师",
+            classroom = "教室",
+            weekDay = "周三",
+            startSection = 1,
+            endSection = 2,
+            activeWeeks = setOf(1, 2),
+            note = "下周记得带实验报告"
+        )
+
+        val restored = course.toEntity(timetableId = 1L).toDomain()
+
+        assertEquals("下周记得带实验报告", restored.note)
     }
 
     @Test
