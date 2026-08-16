@@ -79,6 +79,8 @@ fun TimetableScreen(
     val pdfImportState by viewModel.pdfImportState.collectAsState()
     val updateState by viewModel.updateState.collectAsState()
     val automaticUpdateChecks by viewModel.automaticUpdateChecks.collectAsState()
+    val updatePopupReminders by viewModel.updatePopupReminders.collectAsState()
+    val updatePrompt by viewModel.updatePrompt.collectAsState()
     val lastUpdateCheck by viewModel.lastUpdateCheck.collectAsState()
     var selectedImportSchool by remember { mutableStateOf<TimetableImportSchool?>(null) }
     val pdfPicker = rememberLauncherForActivityResult(
@@ -139,15 +141,35 @@ fun TimetableScreen(
         AboutSettingsScreen(
             updateState = updateState,
             automaticUpdateChecks = automaticUpdateChecks,
+            updatePopupReminders = updatePopupReminders,
             lastUpdateCheck = lastUpdateCheck,
             onAutomaticUpdateChecksChange = viewModel::setAutomaticUpdateChecks,
+            onUpdatePopupRemindersChange = viewModel::setUpdatePopupReminders,
             onCheckForUpdate = viewModel::checkForAppUpdate,
             onDownloadUpdate = viewModel::downloadAppUpdate,
             onInstallUpdate = viewModel::installDownloadedUpdate,
             onBack = { showAboutSettings = false },
             modifier = modifier
         )
+        updatePrompt?.let { info ->
+            UpdateAvailableDialog(
+                info = info,
+                onUpdateNow = { viewModel.downloadAppUpdate(info) },
+                onUpdateLater = viewModel::dismissUpdatePrompt
+            )
+        }
         return
+    }
+
+    updatePrompt?.let { info ->
+        UpdateAvailableDialog(
+            info = info,
+            onUpdateNow = {
+                showAboutSettings = true
+                viewModel.downloadAppUpdate(info)
+            },
+            onUpdateLater = viewModel::dismissUpdatePrompt
+        )
     }
 
     Column(
