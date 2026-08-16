@@ -22,6 +22,7 @@ import com.example.timetable.widget.ScheduleWidgetController
 import com.example.timetable.update.AppUpdateInfo
 import com.example.timetable.update.GitHubUpdateProvider
 import com.example.timetable.update.UpdateCheckResult
+import com.example.timetable.update.shouldShowUpdatePrompt as shouldDisplayUpdatePrompt
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -80,6 +81,12 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         updatePreferences.getBoolean(KEY_AUTOMATIC_UPDATE_CHECKS, true)
     )
     val automaticUpdateChecks: StateFlow<Boolean> = _automaticUpdateChecks.asStateFlow()
+    private val _updatePopupReminders = MutableStateFlow(
+        updatePreferences.getBoolean(KEY_UPDATE_POPUP_REMINDERS, true)
+    )
+    val updatePopupReminders: StateFlow<Boolean> = _updatePopupReminders.asStateFlow()
+    private val _updatePrompt = MutableStateFlow<AppUpdateInfo?>(null)
+    val updatePrompt: StateFlow<AppUpdateInfo?> = _updatePrompt.asStateFlow()
     private val _lastUpdateCheck = MutableStateFlow(
         updatePreferences.getLong(KEY_LAST_UPDATE_CHECK, 0L)
     )
@@ -128,7 +135,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             System.currentTimeMillis() - updatePreferences.getLong(KEY_LAST_UPDATE_CHECK, 0L) >=
             UPDATE_CHECK_INTERVAL_MILLIS
         ) {
-            checkForAppUpdate()
+            checkForAppUpdate(manual = false)
         }
     }
 
@@ -203,7 +210,17 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         updatePreferences.edit().putBoolean(KEY_AUTOMATIC_UPDATE_CHECKS, enabled).apply()
     }
 
+    fun setUpdatePopupReminders(enabled: Boolean) {
+        _updatePopupReminders.value = enabled
+        updatePreferences.edit().putBoolean(KEY_UPDATE_POPUP_REMINDERS, enabled).apply()
+        if (!enabled) _updatePrompt.value = null
+    }
+
     fun checkForAppUpdate() {
+        checkForAppUpdate(manual = true)
+    }
+
+    private fun checkForAppUpdate(manual: Boolean) {
         if (_updateState.value is AppUpdateUiState.Checking ||
             _updateState.value is AppUpdateUiState.Downloading
         ) return
@@ -211,7 +228,12 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             _updateState.value = AppUpdateUiState.Checking
             _updateState.value = try {
                 when (val result = withContext(Dispatchers.IO) { updateProvider.checkForUpdate() }) {
-                    is UpdateCheckResult.Available -> AppUpdateUiState.Available(result.info)
+                    is UpdateCheckResult.Available -> {
+                        if (manual || shouldShowUpdatePrompt(result.info.versionCode)) {
+                            _updatePrompt.value = result.info
+                        }
+                        AppUpdateUiState.Available(result.info)
+                    }
                     is UpdateCheckResult.UpToDate -> AppUpdateUiState.UpToDate(result.checkedAt)
                 }.also {
                     val checkedAt = System.currentTimeMillis()
@@ -227,6 +249,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun downloadAppUpdate(info: AppUpdateInfo) {
+        _updatePrompt.value = null
         viewModelScope.launch {
             _updateState.value = AppUpdateUiState.Downloading(info, 0)
             _updateState.value = try {
@@ -240,6 +263,28 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                 AppUpdateUiState.Error(error.message ?: "下载更新失败")
             }
         }
+    }
+
+    fun dismissUpdatePrompt() {
+        val info = _updatePrompt.value ?: return
+        updatePreferences.edit()
+            .putLong(KEY_DISMISSED_UPDATE_VERSION, info.versionCode)
+            .putLong(KEY_DISMISSED_UPDATE_AT, System.currentTimeMillis())
+            .apply()
+        _updatePrompt.value = null
+    }
+
+    private fun shouldShowUpdatePrompt(versionCode: Long): Boolean {
+        val dismissedVersion = updatePreferences.getLong(KEY_DISMISSED_UPDATE_VERSION, -1L)
+        val dismissedAt = updatePreferences.getLong(KEY_DISMISSED_UPDATE_AT, 0L)
+        return shouldDisplayUpdatePrompt(
+            remindersEnabled = _updatePopupReminders.value,
+            availableVersionCode = versionCode,
+            dismissedVersionCode = dismissedVersion,
+            dismissedAt = dismissedAt,
+            now = System.currentTimeMillis(),
+            snoozeMillis = UPDATE_PROMPT_SNOOZE_MILLIS
+        )
     }
 
     fun installDownloadedUpdate() {
@@ -319,6 +364,10 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         private const val MAX_IMPORT_WEEKS = 30
         private const val KEY_AUTOMATIC_UPDATE_CHECKS = "automatic_update_checks"
         private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
+        private const val KEY_UPDATE_POPUP_REMINDERS = "update_popup_reminders"
+        private const val KEY_DISMISSED_UPDATE_VERSION = "dismissed_update_version"
+        private const val KEY_DISMISSED_UPDATE_AT = "dismissed_update_at"
         private const val UPDATE_CHECK_INTERVAL_MILLIS = 24 * 60 * 60 * 1000L
+        private const val UPDATE_PROMPT_SNOOZE_MILLIS = 24 * 60 * 60 * 1000L
     }
 }

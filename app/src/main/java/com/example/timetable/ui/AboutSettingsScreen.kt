@@ -35,8 +35,10 @@ import java.util.Date
 fun AboutSettingsScreen(
     updateState: AppUpdateUiState,
     automaticUpdateChecks: Boolean,
+    updatePopupReminders: Boolean,
     lastUpdateCheck: Long,
     onAutomaticUpdateChecksChange: (Boolean) -> Unit,
+    onUpdatePopupRemindersChange: (Boolean) -> Unit,
     onCheckForUpdate: () -> Unit,
     onDownloadUpdate: (com.example.timetable.update.AppUpdateInfo) -> Unit,
     onInstallUpdate: () -> Unit,
@@ -96,6 +98,20 @@ fun AboutSettingsScreen(
                 onCheckedChange = onAutomaticUpdateChecksChange
             )
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("有可用更新时弹窗提醒")
+                Text("选择稍后更新后，24 小时内不再提醒同一版本", fontSize = 12.sp)
+            }
+            Switch(
+                checked = updatePopupReminders,
+                onCheckedChange = onUpdatePopupRemindersChange
+            )
+        }
         if (lastUpdateCheck > 0) {
             Text(
                 "最近检查：${DateFormat.getDateTimeInstance().format(Date(lastUpdateCheck))}",
@@ -148,6 +164,30 @@ fun AboutSettingsScreen(
             }
         )
     }
+}
+
+@Composable
+fun UpdateAvailableDialog(
+    info: com.example.timetable.update.AppUpdateInfo,
+    onUpdateNow: () -> Unit,
+    onUpdateLater: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onUpdateLater,
+        title = { Text("发现新版本 ${info.versionName}") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text("大小：${formatFileSize(info.apkSize)}")
+                Text(info.releaseNotes, modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onUpdateNow) { Text("马上更新") }
+        },
+        dismissButton = {
+            TextButton(onClick = onUpdateLater) { Text("稍后更新") }
+        }
+    )
 }
 
 @Composable

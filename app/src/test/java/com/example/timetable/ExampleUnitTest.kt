@@ -12,6 +12,7 @@ import com.example.timetable.importer.NenuPdfTimetableParser
 import com.example.timetable.data.toEntity
 import com.example.timetable.data.toDomain
 import com.example.timetable.update.parseReleaseVersionCode
+import com.example.timetable.update.shouldShowUpdatePrompt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -27,6 +28,17 @@ class ExampleUnitTest {
         assertEquals(7L, parseReleaseVersionCode("versionCode: 7"))
         assertEquals(8L, parseReleaseVersionCode("versionCode = 8"))
         assertNull(parseReleaseVersionCode("版本：1.2.0"))
+    }
+
+    @Test
+    fun controlsAutomaticUpdatePromptReminders() {
+        val day = 24 * 60 * 60 * 1000L
+        val now = 10 * day
+
+        assertFalse(shouldShowUpdatePrompt(false, 7, -1, 0, now, day))
+        assertFalse(shouldShowUpdatePrompt(true, 7, 7, now - day / 2, now, day))
+        assertTrue(shouldShowUpdatePrompt(true, 7, 7, now - day, now, day))
+        assertTrue(shouldShowUpdatePrompt(true, 8, 7, now, now, day))
     }
 
     @Test
