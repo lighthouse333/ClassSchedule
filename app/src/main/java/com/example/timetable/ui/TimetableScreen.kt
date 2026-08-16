@@ -14,6 +14,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -48,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -99,6 +101,7 @@ fun TimetableScreen(
     var dragCourseSelection by remember { mutableStateOf<CourseSelection?>(null) }
     var selectionAwaitingConfirmation by remember { mutableStateOf<CourseSelection?>(null) }
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
+    var courseBeingEdited by remember { mutableStateOf<Course?>(null) }
     var coursePendingDeletion by remember { mutableStateOf<Course?>(null) }
     var currentWeek by remember { mutableStateOf(1) }
     val sectionCount = settings.sectionCount
@@ -388,17 +391,33 @@ fun TimetableScreen(
             )
         }
 
-        selectedCourse?.let { courseToEdit ->
+        selectedCourse?.let { courseToView ->
+            CourseDetailDialog(
+                course = courseToView,
+                onDismiss = { selectedCourse = null },
+                onEdit = {
+                    courseBeingEdited = courseToView
+                    selectedCourse = null
+                },
+                onSaveNote = { note ->
+                    val updatedCourse = courseToView.copy(note = note)
+                    viewModel.updateCourse(updatedCourse)
+                    selectedCourse = updatedCourse
+                }
+            )
+        }
+
+        courseBeingEdited?.let { courseToEdit ->
             EditCourseDialog(
                 course = courseToEdit,
                 weekDays = weekDays,
                 courses = courses,
                 classPeriods = classPeriods,
                 totalWeeks = totalWeeks,
-                onDismiss = { selectedCourse = null },
+                onDismiss = { courseBeingEdited = null },
                 onDeleteRequest = {
                     coursePendingDeletion = courseToEdit
-                    selectedCourse = null
+                    courseBeingEdited = null
                 },
                 onSaveCourse = { updatedCourse ->
                     val courseIndex = courses.indexOf(courseToEdit)
@@ -407,7 +426,7 @@ fun TimetableScreen(
                             updatedCourse.copy(id = courseToEdit.id)
                         )
                     }
-                    selectedCourse = null
+                    courseBeingEdited = null
                 }
             )
         }
@@ -449,15 +468,24 @@ fun TimetableScreen(
         ) {
             TextButton(
                 enabled = pagerState.canScrollBackward,
+                modifier = Modifier.weight(1f),
                 onClick = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
                     }
                 }
             ) {
-                Text("上一周")
+                Text("上一周", maxLines = 1)
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BoxWithConstraints(
+                modifier = Modifier.weight(0.8f),
+                contentAlignment = Alignment.Center
+            ) {
+                val weekFontSize = when {
+                    maxWidth < 56.dp -> 12.sp
+                    maxWidth < 72.dp -> 14.sp
+                    else -> 16.sp
+                }
                 AnimatedContent(
                     targetState = currentWeek,
                     transitionSpec = {
@@ -470,18 +498,26 @@ fun TimetableScreen(
                     },
                     label = "week-number"
                 ) { week ->
-                    Text(text = "第 $week 周", fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "第 $week 周",
+                        fontSize = weekFontSize,
+                        lineHeight = weekFontSize * 1.15f,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
             TextButton(
                 enabled = pagerState.canScrollForward,
+                modifier = Modifier.weight(1f),
                 onClick = {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage + 1)
                     }
                 }
             ) {
-                Text("下一周")
+                Text("下一周", maxLines = 1)
             }
         }
 
@@ -958,28 +994,37 @@ private fun TimetableHeaderCell(
 ) {
     val backgroundColor = if (isHighlighted) Color(0xFFFFE0B2) else Color(0xFFE8EAF6)
     val contentColor = if (isHighlighted) Color(0xFFE65100) else Color.Black
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .padding(2.dp)
             .background(backgroundColor, RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
+        val fontScale = LocalDensity.current.fontScale
+        val widthScale = (maxWidth.value / 52f).coerceIn(0.72f, 1f)
+        val accessibilityAdjustment = (1f / fontScale).coerceIn(0.78f, 1f)
+        val titleSize = (11f * widthScale * accessibilityAdjustment).coerceAtLeast(8f).sp
+        val dateSize = (9f * widthScale * accessibilityAdjustment).coerceAtLeast(7f).sp
         val lines = text.split('\n', limit = 2)
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = lines.first(),
-                fontSize = 11.sp,
-                lineHeight = 12.sp,
+                fontSize = titleSize,
+                lineHeight = titleSize * 1.1f,
                 fontWeight = FontWeight.Bold,
-                color = contentColor
+                color = contentColor,
+                maxLines = 1,
+                softWrap = false
             )
             lines.getOrNull(1)?.let { date ->
                 Text(
                     text = date,
-                    fontSize = 9.sp,
-                    lineHeight = 10.sp,
-                    color = if (isHighlighted) contentColor else Color.Gray
+                    fontSize = dateSize,
+                    lineHeight = dateSize * 1.1f,
+                    color = if (isHighlighted) contentColor else Color.Gray,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -993,17 +1038,23 @@ private fun TimetableSectionCell(
     endTime: String,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .padding(2.dp)
             .background(Color(0xFFF5F5F5), RoundedCornerShape(6.dp)),
         contentAlignment = Alignment.Center
     ) {
+        val fontScale = LocalDensity.current.fontScale
+        val widthScale = (maxWidth.value / 28f).coerceIn(0.72f, 1.25f)
+        val heightScale = (maxHeight.value / 72f).coerceIn(0.8f, 1.2f)
+        val accessibilityAdjustment = (1f / fontScale).coerceIn(0.72f, 1f)
+        val adaptiveScale = minOf(widthScale, heightScale) * accessibilityAdjustment
+        val fontSize = (6.5f * adaptiveScale).coerceIn(5f, 7.5f).sp
         Text(
             text = "$section\n$startTime\n$endTime",
-            fontSize = 5.5.sp,
-            lineHeight = 6.5.sp,
+            fontSize = fontSize,
+            lineHeight = fontSize * 1.18f,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             softWrap = false
