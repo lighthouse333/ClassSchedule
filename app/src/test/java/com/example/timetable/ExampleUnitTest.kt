@@ -9,6 +9,7 @@ import com.example.timetable.model.parseActiveWeeks
 import com.example.timetable.model.weekSchedulesOverlap
 import com.example.timetable.importer.BuctPdfTimetableParser
 import com.example.timetable.importer.NenuPdfTimetableParser
+import com.example.timetable.importer.ZjuXlsxTimetableParser
 import com.example.timetable.data.toEntity
 import com.example.timetable.data.toDomain
 import com.example.timetable.update.parseReleaseVersionCode
@@ -271,5 +272,61 @@ class ExampleUnitTest {
         assertEquals(setOf(1, 2), courses[2].activeWeeks)
         assertEquals("劳动教育", courses[2].name)
         assertEquals("传媒东130", courses[0].classroom)
+    }
+
+    @Test
+    fun parsesZjuRowsAndSplitsMultipleClassTimes() {
+        val timetable = ZjuXlsxTimetableParser.parseRows(
+            rows = listOf(
+                listOf("2026-2027学年秋冬学期测试课表"),
+                listOf("课程代码", "课程名称", "教师姓名", "学期", "上课时间", "上课地点"),
+                listOf(
+                    "LAW2006M",
+                    "刑法分论",
+                    "梁健",
+                    "秋冬",
+                    "周一第7,8节;周一第9,10节",
+                    "紫金港西1-304;紫金港西1-305"
+                )
+            ),
+            totalWeeks = 30
+        )
+
+        assertEquals(2, timetable.courses.size)
+        assertEquals("2026-2027学年秋冬学期测试课表", timetable.title)
+        assertEquals("周一", timetable.courses[0].weekDay)
+        assertEquals(7, timetable.courses[0].startSection)
+        assertEquals(8, timetable.courses[0].endSection)
+        assertEquals("紫金港西1-304", timetable.courses[0].classroom)
+        assertEquals(9, timetable.courses[1].startSection)
+        assertEquals("紫金港西1-305", timetable.courses[1].classroom)
+        assertEquals((1..16).toSet(), timetable.courses[0].activeWeeks)
+    }
+
+    @Test
+    fun deduplicatesRepeatedZjuCourseArrangements() {
+        val rows = listOf(
+            listOf("课程名称", "教师姓名", "学期", "上课时间", "上课地点"),
+            listOf("行政法", "金承东", "秋冬", "周二第1,2节", "紫金港西1-317"),
+            listOf(
+                "行政法",
+                "金承东",
+                "秋冬",
+                "周二第1,2节;周二第3,4节",
+                "紫金港西1-317;紫金港西1-303"
+            )
+        )
+
+        val courses = ZjuXlsxTimetableParser.parseRows(rows, 30).courses
+
+        assertEquals(2, courses.size)
+        assertEquals(listOf(1, 3), courses.map(Course::startSection))
+    }
+
+    @Test
+    fun mapsZjuQuarterTermsToSemesterWeeks() {
+        assertEquals((1..8).toSet(), ZjuXlsxTimetableParser.activeWeeksForTerm("秋", 30))
+        assertEquals((9..16).toSet(), ZjuXlsxTimetableParser.activeWeeksForTerm("冬", 30))
+        assertEquals((1..16).toSet(), ZjuXlsxTimetableParser.activeWeeksForTerm("春夏", 30))
     }
 }

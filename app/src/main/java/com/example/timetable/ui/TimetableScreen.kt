@@ -34,6 +34,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -898,13 +899,26 @@ private fun ImportSchoolDialog(
         title = { Text("选择学校") },
         text = {
             Column {
-                Text("请选择课表所属学校。后续可以继续添加其他学校。")
+                Text("请选择课表所属学校，并按说明准备文件。")
                 schools.forEach { school ->
                     TextButton(
                         onClick = { onSelect(school) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(school.displayName)
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Text(
+                                text = school.displayName,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = school.importRequirement,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
             }

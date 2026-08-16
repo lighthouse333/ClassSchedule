@@ -14,6 +14,7 @@ import com.example.timetable.importer.NenuPdfTimetableParser
 import com.example.timetable.importer.ParsedTimetable
 import com.example.timetable.importer.TimetableFileParser
 import com.example.timetable.importer.TimetableImportSchool
+import com.example.timetable.importer.ZjuXlsxTimetableParser
 import com.example.timetable.model.Course
 import com.example.timetable.model.ScheduleSettings
 import com.example.timetable.model.ClassPeriod
@@ -71,7 +72,9 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         TimetableImportSchool.BEIJING_UNIVERSITY_OF_CHEMICAL_TECHNOLOGY to
             BuctPdfTimetableParser(application),
         TimetableImportSchool.NORTHEAST_NORMAL_UNIVERSITY to
-            NenuPdfTimetableParser(application)
+            NenuPdfTimetableParser(application),
+        TimetableImportSchool.ZHEJIANG_UNIVERSITY to
+            ZjuXlsxTimetableParser(application)
     )
     private val _pdfImportState = MutableStateFlow<PdfImportState>(PdfImportState.Idle)
     val pdfImportState: StateFlow<PdfImportState> = _pdfImportState.asStateFlow()
@@ -305,7 +308,7 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 PdfImportState.Success(parsed)
             } catch (error: Exception) {
-                PdfImportState.Error(error.message ?: "PDF 解析失败")
+                PdfImportState.Error(error.message ?: "课表解析失败")
             }
         }
     }
