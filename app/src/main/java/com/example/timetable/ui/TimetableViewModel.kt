@@ -19,6 +19,10 @@ import com.example.timetable.model.ScheduleSettings
 import com.example.timetable.model.ClassPeriod
 import com.example.timetable.model.createDefaultScheduleSettings
 import com.example.timetable.widget.ScheduleWidgetController
+import com.example.timetable.update.AppUpdateInfo
+import com.example.timetable.update.GitHubUpdateProvider
+import com.example.timetable.update.UpdateCheckResult
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +43,16 @@ sealed interface PdfImportState {
     data class Error(val message: String) : PdfImportState
 }
 
+sealed interface AppUpdateUiState {
+    data object Idle : AppUpdateUiState
+    data object Checking : AppUpdateUiState
+    data class UpToDate(val checkedAt: Long) : AppUpdateUiState
+    data class Available(val info: AppUpdateInfo) : AppUpdateUiState
+    data class Downloading(val info: AppUpdateInfo, val progress: Int) : AppUpdateUiState
+    data class Ready(val info: AppUpdateInfo, val apk: File, val message: String? = null) : AppUpdateUiState
+    data class Error(val message: String) : AppUpdateUiState
+}
+
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class TimetableViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getInstance(application)
@@ -47,6 +61,11 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
     )
     private val timetableRepository = TimetableRepository(database.timetableDao())
     private val settingsRepository = ScheduleSettingsRepository(application)
+    private val updateProvider = GitHubUpdateProvider(application)
+    private val updatePreferences = application.getSharedPreferences(
+        "app_update_settings",
+        android.content.Context.MODE_PRIVATE
+    )
     private val timetableParsers: Map<TimetableImportSchool, TimetableFileParser> = mapOf(
         TimetableImportSchool.BEIJING_UNIVERSITY_OF_CHEMICAL_TECHNOLOGY to
             BuctPdfTimetableParser(application),
@@ -55,6 +74,16 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
     )
     private val _pdfImportState = MutableStateFlow<PdfImportState>(PdfImportState.Idle)
     val pdfImportState: StateFlow<PdfImportState> = _pdfImportState.asStateFlow()
+    private val _updateState = MutableStateFlow<AppUpdateUiState>(AppUpdateUiState.Idle)
+    val updateState: StateFlow<AppUpdateUiState> = _updateState.asStateFlow()
+    private val _automaticUpdateChecks = MutableStateFlow(
+        updatePreferences.getBoolean(KEY_AUTOMATIC_UPDATE_CHECKS, true)
+    )
+    val automaticUpdateChecks: StateFlow<Boolean> = _automaticUpdateChecks.asStateFlow()
+    private val _lastUpdateCheck = MutableStateFlow(
+        updatePreferences.getLong(KEY_LAST_UPDATE_CHECK, 0L)
+    )
+    val lastUpdateCheck: StateFlow<Long> = _lastUpdateCheck.asStateFlow()
 
     val timetables = timetableRepository.timetables.stateIn(
         scope = viewModelScope,
@@ -94,6 +123,12 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         viewModelScope.launch {
             timetableRepository.ensureDefaultTimetable()
+        }
+        if (_automaticUpdateChecks.value &&
+            System.currentTimeMillis() - updatePreferences.getLong(KEY_LAST_UPDATE_CHECK, 0L) >=
+            UPDATE_CHECK_INTERVAL_MILLIS
+        ) {
+            checkForAppUpdate()
         }
     }
 
@@ -160,6 +195,57 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
             timetableRepository.delete(timetableId)
             settingsRepository.deleteSettings(timetableId)
             ScheduleWidgetController.updateAll(getApplication())
+        }
+    }
+
+    fun setAutomaticUpdateChecks(enabled: Boolean) {
+        _automaticUpdateChecks.value = enabled
+        updatePreferences.edit().putBoolean(KEY_AUTOMATIC_UPDATE_CHECKS, enabled).apply()
+    }
+
+    fun checkForAppUpdate() {
+        if (_updateState.value is AppUpdateUiState.Checking ||
+            _updateState.value is AppUpdateUiState.Downloading
+        ) return
+        viewModelScope.launch {
+            _updateState.value = AppUpdateUiState.Checking
+            _updateState.value = try {
+                when (val result = withContext(Dispatchers.IO) { updateProvider.checkForUpdate() }) {
+                    is UpdateCheckResult.Available -> AppUpdateUiState.Available(result.info)
+                    is UpdateCheckResult.UpToDate -> AppUpdateUiState.UpToDate(result.checkedAt)
+                }.also {
+                    val checkedAt = System.currentTimeMillis()
+                    _lastUpdateCheck.value = checkedAt
+                    updatePreferences.edit()
+                        .putLong(KEY_LAST_UPDATE_CHECK, checkedAt)
+                        .apply()
+                }
+            } catch (error: Exception) {
+                AppUpdateUiState.Error(error.message ?: "检查更新失败")
+            }
+        }
+    }
+
+    fun downloadAppUpdate(info: AppUpdateInfo) {
+        viewModelScope.launch {
+            _updateState.value = AppUpdateUiState.Downloading(info, 0)
+            _updateState.value = try {
+                val apk = withContext(Dispatchers.IO) {
+                    updateProvider.downloadUpdate(info) { progress ->
+                        _updateState.value = AppUpdateUiState.Downloading(info, progress)
+                    }
+                }
+                AppUpdateUiState.Ready(info, apk)
+            } catch (error: Exception) {
+                AppUpdateUiState.Error(error.message ?: "下载更新失败")
+            }
+        }
+    }
+
+    fun installDownloadedUpdate() {
+        val ready = _updateState.value as? AppUpdateUiState.Ready ?: return
+        if (!updateProvider.requestInstall(ready.apk)) {
+            _updateState.value = ready.copy(message = "请允许安装未知应用，返回后再次点击安装")
         }
     }
 
@@ -231,5 +317,8 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
 
     companion object {
         private const val MAX_IMPORT_WEEKS = 30
+        private const val KEY_AUTOMATIC_UPDATE_CHECKS = "automatic_update_checks"
+        private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
+        private const val UPDATE_CHECK_INTERVAL_MILLIS = 24 * 60 * 60 * 1000L
     }
 }

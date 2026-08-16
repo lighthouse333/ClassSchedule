@@ -77,6 +77,9 @@ fun TimetableScreen(
     val currentTimetable by viewModel.currentTimetable.collectAsState()
     val selectedTimetableId by viewModel.selectedTimetableId.collectAsState()
     val pdfImportState by viewModel.pdfImportState.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
+    val automaticUpdateChecks by viewModel.automaticUpdateChecks.collectAsState()
+    val lastUpdateCheck by viewModel.lastUpdateCheck.collectAsState()
     var selectedImportSchool by remember { mutableStateOf<TimetableImportSchool?>(null) }
     val pdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -94,6 +97,7 @@ fun TimetableScreen(
     var showImportSchoolDialog by remember { mutableStateOf(false) }
     var showTimetableDialog by remember { mutableStateOf(false) }
     var showCreateTimetableDialog by remember { mutableStateOf(false) }
+    var showAboutSettings by remember { mutableStateOf(false) }
     var timetablePendingRename by remember { mutableStateOf<TimetableEntity?>(null) }
     var timetablePendingDeletion by remember { mutableStateOf<TimetableEntity?>(null) }
     var showTopMenu by remember { mutableStateOf(false) }
@@ -129,6 +133,21 @@ fun TimetableScreen(
     LaunchedEffect(currentWeek) {
         selectionAwaitingConfirmation = null
         dragCourseSelection = null
+    }
+
+    if (showAboutSettings) {
+        AboutSettingsScreen(
+            updateState = updateState,
+            automaticUpdateChecks = automaticUpdateChecks,
+            lastUpdateCheck = lastUpdateCheck,
+            onAutomaticUpdateChecksChange = viewModel::setAutomaticUpdateChecks,
+            onCheckForUpdate = viewModel::checkForAppUpdate,
+            onDownloadUpdate = viewModel::downloadAppUpdate,
+            onInstallUpdate = viewModel::installDownloadedUpdate,
+            onBack = { showAboutSettings = false },
+            modifier = modifier
+        )
+        return
     }
 
     Column(
@@ -209,6 +228,13 @@ fun TimetableScreen(
                         onClick = {
                             showTopMenu = false
                             showSemesterSettingsDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("关于与设置") },
+                        onClick = {
+                            showTopMenu = false
+                            showAboutSettings = true
                         }
                     )
                 }

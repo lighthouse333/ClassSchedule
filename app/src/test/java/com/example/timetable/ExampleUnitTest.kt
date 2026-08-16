@@ -11,6 +11,7 @@ import com.example.timetable.importer.BuctPdfTimetableParser
 import com.example.timetable.importer.NenuPdfTimetableParser
 import com.example.timetable.data.toEntity
 import com.example.timetable.data.toDomain
+import com.example.timetable.update.parseReleaseVersionCode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -19,6 +20,15 @@ import org.junit.Test
 import java.time.LocalDate
 
 class ExampleUnitTest {
+    @Test
+    fun parsesReleaseVersionCodeUsingSupportedSeparators() {
+        assertEquals(5L, parseReleaseVersionCode("版本：1.2.0（versionCode 5）"))
+        assertEquals(6L, parseReleaseVersionCode("versionCode：6"))
+        assertEquals(7L, parseReleaseVersionCode("versionCode: 7"))
+        assertEquals(8L, parseReleaseVersionCode("versionCode = 8"))
+        assertNull(parseReleaseVersionCode("版本：1.2.0"))
+    }
+
     @Test
     fun findsWeekUsingDisplayedDateRangesAndClampsOutsideSemester() {
         val semesterStart = LocalDate.of(2026, 9, 7)
