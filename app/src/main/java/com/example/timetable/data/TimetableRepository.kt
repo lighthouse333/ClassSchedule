@@ -12,4 +12,12 @@ class TimetableRepository(private val timetableDao: TimetableDao) {
     suspend fun create(name: String): Long = timetableDao.insert(
         TimetableEntity(name = name.trim())
     )
+
+    suspend fun rename(timetableId: Long, name: String) {
+        timetableDao.rename(timetableId, name.trim())
+    }
+
+    suspend fun delete(timetableId: Long) {
+        timetableDao.deleteWithCourses(timetableId)
+    }
 }

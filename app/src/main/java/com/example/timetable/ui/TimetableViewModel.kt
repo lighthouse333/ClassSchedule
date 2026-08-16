@@ -142,6 +142,27 @@ class TimetableViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun renameTimetable(timetableId: Long, name: String) {
+        val cleanedName = name.trim()
+        if (cleanedName.isEmpty()) return
+        viewModelScope.launch {
+            timetableRepository.rename(timetableId, cleanedName)
+            ScheduleWidgetController.updateAll(getApplication())
+        }
+    }
+
+    fun deleteTimetable(timetableId: Long) {
+        val remainingTimetable = timetables.value.firstOrNull { it.id != timetableId } ?: return
+        viewModelScope.launch {
+            if (selectedTimetableId.value == timetableId) {
+                settingsRepository.selectTimetable(remainingTimetable.id)
+            }
+            timetableRepository.delete(timetableId)
+            settingsRepository.deleteSettings(timetableId)
+            ScheduleWidgetController.updateAll(getApplication())
+        }
+    }
+
     fun parseTimetableFile(uri: Uri, school: TimetableImportSchool) {
         viewModelScope.launch {
             _pdfImportState.value = PdfImportState.Loading

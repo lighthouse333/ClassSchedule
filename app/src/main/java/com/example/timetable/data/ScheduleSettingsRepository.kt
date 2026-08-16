@@ -93,6 +93,15 @@ class ScheduleSettingsRepository(
         }
     }
 
+    suspend fun deleteSettings(timetableId: Long) {
+        context.scheduleSettingsDataStore.edit { preferences ->
+            preferences.remove(stringPreferencesKey("semester_start_$timetableId"))
+            preferences.remove(intPreferencesKey("total_weeks_$timetableId"))
+            preferences.remove(intPreferencesKey("section_count_$timetableId"))
+            preferences.remove(stringPreferencesKey("class_periods_$timetableId"))
+        }
+    }
+
     private fun encodePeriods(periods: List<ClassPeriod>): String =
         periods.joinToString(";") { period ->
             "${period.number},${period.startMinutes},${period.endMinutes}"

@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.timetable.model.Course
+import com.example.timetable.data.TimetableEntity
 import com.example.timetable.importer.TimetableImportSchool
 import com.example.timetable.model.findWeekContainingDate
 import com.example.timetable.model.formatActiveWeeks
@@ -91,6 +92,8 @@ fun TimetableScreen(
     var showImportSchoolDialog by remember { mutableStateOf(false) }
     var showTimetableDialog by remember { mutableStateOf(false) }
     var showCreateTimetableDialog by remember { mutableStateOf(false) }
+    var timetablePendingRename by remember { mutableStateOf<TimetableEntity?>(null) }
+    var timetablePendingDeletion by remember { mutableStateOf<TimetableEntity?>(null) }
     var showTopMenu by remember { mutableStateOf(false) }
     var pendingCourseSelection by remember { mutableStateOf<CourseSelection?>(null) }
     var dragCourseSelection by remember { mutableStateOf<CourseSelection?>(null) }
@@ -221,6 +224,31 @@ fun TimetableScreen(
                 onCreate = {
                     showTimetableDialog = false
                     showCreateTimetableDialog = true
+                },
+                onRename = { timetable -> timetablePendingRename = timetable },
+                onDelete = { timetable -> timetablePendingDeletion = timetable }
+            )
+        }
+
+        timetablePendingRename?.let { timetable ->
+            RenameTimetableDialog(
+                timetable = timetable,
+                onDismiss = { timetablePendingRename = null },
+                onRename = { name ->
+                    viewModel.renameTimetable(timetable.id, name)
+                    timetablePendingRename = null
+                }
+            )
+        }
+
+        timetablePendingDeletion?.let { timetable ->
+            DeleteTimetableDialog(
+                timetable = timetable,
+                onDismiss = { timetablePendingDeletion = null },
+                onDelete = {
+                    viewModel.deleteTimetable(timetable.id)
+                    timetablePendingDeletion = null
+                    showTimetableDialog = false
                 }
             )
         }
@@ -658,11 +686,13 @@ fun TimetableScreen(
 
 @Composable
 private fun TimetableSelectionDialog(
-    timetables: List<com.example.timetable.data.TimetableEntity>,
+    timetables: List<TimetableEntity>,
     selectedTimetableId: Long,
     onDismiss: () -> Unit,
     onSelect: (Long) -> Unit,
-    onCreate: () -> Unit
+    onCreate: () -> Unit,
+    onRename: (TimetableEntity) -> Unit,
+    onDelete: (TimetableEntity) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -677,7 +707,16 @@ private fun TimetableSelectionDialog(
                                 if (checked) onSelect(timetable.id)
                             }
                         )
-                        Text(timetable.name)
+                        Text(timetable.name, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { onRename(timetable) }) {
+                            Text("重命名")
+                        }
+                        TextButton(
+                            enabled = timetables.size > 1,
+                            onClick = { onDelete(timetable) }
+                        ) {
+                            Text("删除")
+                        }
                     }
                 }
                 TextButton(onClick = onCreate, modifier = Modifier.fillMaxWidth()) {
@@ -686,6 +725,51 @@ private fun TimetableSelectionDialog(
             }
         },
         confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+@Composable
+private fun RenameTimetableDialog(
+    timetable: TimetableEntity,
+    onDismiss: () -> Unit,
+    onRename: (String) -> Unit
+) {
+    var name by remember(timetable.id) { mutableStateOf(timetable.name) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("重命名课表") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("课表名称") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank() && name.trim() != timetable.name,
+                onClick = { onRename(name.trim()) }
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+@Composable
+private fun DeleteTimetableDialog(
+    timetable: TimetableEntity,
+    onDismiss: () -> Unit,
+    onDelete: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("删除课表") },
+        text = { Text("确定删除“${timetable.name}”吗？其中的所有课程也会被永久删除。") },
+        confirmButton = {
+            TextButton(onClick = onDelete) { Text("删除", color = Color.Red) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }
